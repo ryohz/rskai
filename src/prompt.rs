@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 pub struct Prompt {
     pub commands: Vec<super::command::Command>,
     pub prompt_prefix: String,
     pub prev_state: bool,
     pub error_sign: String,
-    // pub ctrlc_state: bool,
+    pub history_path: PathBuf,
 }
 
 impl Prompt {
@@ -11,6 +13,7 @@ impl Prompt {
         commands_: Option<Vec<super::command::Command>>,
         prompt_prefix_: Option<&str>,
         error_sign_: Option<&str>,
+        history_path: PathBuf,
     ) -> Self {
         let mut commands = super::command::builtins();
         let mut prompt_prefix = "rshell> ".to_string();
@@ -29,17 +32,21 @@ impl Prompt {
             error_sign = error_sign_.unwrap().to_string();
         }
 
-        Prompt {
+        Self {
             commands,
             prompt_prefix,
             prev_state,
             error_sign,
+            history_path,
         }
     }
     // entrypoint of interactive shell
     // this function accept user input and give the arguments to vary functions
     pub async fn start(&mut self) {
         let mut rl = rustyline::DefaultEditor::new().unwrap();
+        if rl.load_history(&self.history_path).is_err() {
+            println!("No previous history.");
+        }
         loop {
             let error_prefix = if self.prev_state {
                 format!("{} ", super::console::color::red(&self.error_sign))
@@ -66,6 +73,8 @@ impl Prompt {
                     break;
                 }
             }
+
+            let _ = rl.add_history_entry(input.as_str());
 
             if input == "exit" {
                 break;
@@ -98,6 +107,7 @@ impl Prompt {
                 continue;
             }
         }
+        let _ = rl.save_history(&self.history_path);
     }
 
     fn execute_command(&self, name: &String, args: Option<&String>) -> super::types::IsError {
